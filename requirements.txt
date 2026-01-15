@@ -1,0 +1,8 @@
+pyftpdlib
+python-dotenv
+azure-storage-blob 
+azure-identity
+pandas 
+pyyaml 
+watchdog 
+pytest

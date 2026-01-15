@@ -1,0 +1,265 @@
+checks:                  # Global QC checks to apply to all parameters 
+  numeric: true          # Value is numeric / can be parsed to float
+  completeness: true     # Value is present (not NaN/empty/"NA")
+  format: true           # Format / decimals / pattern check
+  range: true            # Min/max sanity range check
+  nonnegative: true      # Value must be >= 0 when required
+  flatline: true         # N identical consecutive values -> FAIL (stuck sensor)
+  spike: false         # Sudden jump check vs previous value (disabled for now)
+
+parameters:
+  Turbidity_NTU:
+    origin: Observator
+    raw_columns: ["Turbidity (NTU)", "Turbidity"]
+    label: Turbidity
+    unit: NTU
+    example: 0.89
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 200.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Optical sensor; should be >= 0
+
+  Temp_C:
+    origin: Observator
+    raw_columns: ["Temp (C)", "Temp"]
+    label: Temp
+    unit: C
+    example: 7.24
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: false
+      min_value: -2.0
+      max_value: 35.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Temperature may go below 0
+
+  SpCond_uScm:
+    origin: Observator
+    raw_columns: ["SpCond (uS/cm)", "SpCond"]
+    label: SpCond
+    unit: uS/cm
+    example: 314.18
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 100.0
+      max_value: 1000.0
+      streak_threshold: 50
+      max_delta_per_step: 100
+    notes: Specific conductance >= 0
+
+  Conductivity_uScm:
+    origin: Observator
+    raw_columns: ["Conductivity (uS/cm)", "Cond (uS/cm)", "Cond uS/cm", "Conductivity"]
+    label: Conductivity
+    unit: uS/cm
+    example: 207.58
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 100.0
+      max_value: 1000.0
+      streak_threshold: 50
+      max_delta_per_step: 100
+    notes: Should be >= 0
+
+  pH:
+    origin: Observator
+    raw_columns: ["pH"]
+    label: pH
+    example: 8.21
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: false
+      min_value: 4.0
+      max_value: 10.0
+      streak_threshold: 75
+      max_delta_per_step: 1
+    notes: Range check covers validity
+
+  Tryptophan_ugL:
+    origin: Observator
+    raw_columns: ["Tryptophan (ug/L)", "microFlu_TRP", "Tryptophan"]
+    label: Tryptophan
+    unit: ug/L
+    example: 28.64
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 5000.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Fluorescence-derived; should be >= 0
+
+  fDOM_RFU:
+    origin: Observator
+    raw_columns: ["fDOM (RFU)", "fDOM RFU", "CDOMf_Raw", "fDOM"]
+    label: fDOM
+    unit: RFU
+    example: 10.86
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 300.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Raw fluorescence; should be >= 0
+
+  fDOM_QSU:
+    origin: Observator
+    raw_columns: ["fDOM (QSU)", "fDOM QSU", "CDOMf_QSU"]
+    label: fDOM
+    unit: QSU
+    example: 32.58
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 300.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Calibrated fluorescence; should be >= 0
+
+  Chlorophyll_ugL:
+    origin: Observator
+    raw_columns: ["Cholorophyll (ug/L)", "Chlorophyll (ug/L)", "Chl (ug/L)"]
+    label: Chlorophyll
+    unit: ug/L
+    example: 7.6
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 300.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Chlorophyll-a concentration; blooms can be high
+
+  Chlorophyll_RFU:
+    origin: Observator
+    raw_columns: ["Cholrophyll (RFU)", "Chlorophyll (RFU)", "Chl RFU"]
+    label: Chlorophyll
+    unit: RFU
+    example: 1.9
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 200.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Raw fluorescence scale sanity range
+
+  BGA_PC_ugL:
+    origin: Observator
+    raw_columns: ["BGA PC (ug/L)", "PC (ug/L)", "BGA_PC_ugL"]
+    label: BGA PC
+    unit: ug/L
+    example: 1.1
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 1000.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Phycocyanin concentration sanity range
+
+  BGA_PC_RFU:
+    origin: Observator
+    raw_columns: ["BGA PC (RFU)", "PC (RFU)", "BGA_PC_RFU"]
+    label: BGA PC
+    unit: RFU
+    example: 1.1
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 100.0
+      streak_threshold: 50
+      max_delta_per_step: 5
+    notes: Raw RFU sanity range
+
+  TimeStamp:
+    origin: Observator
+    raw_columns: ["TimeStamp", "Timestamp", "Time"]
+    label: TimeStamp
+    example: "30/11/2025 00:00"
+    rules:
+      numeric_required: false
+      allow_nulls: false
+      timestamp_format: "%d/%m/%Y %H:%M"
+    notes: Must parse with %d/%m/%Y %H:%M
+
+  Sample_Numb:
+    origin: Coliminder
+    raw_columns: ["Sample Numb", "Sample Numb.", "Sample Number"]
+    label: Sample Numb
+    example: 1
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 0              # integer only
+      nonnegative_required: true
+      min_value: 1.0              # only 1 allowed
+      max_value: 1.0              # only 1 allowed
+      allowed_values: [1]         # 1 = PASS, 0/other = FAIL
+    notes: Exact match required; only value 1 passes
+
+  Activity:
+    origin: Coliminder
+    raw_columns: ["Activity"]
+    label: Activity
+    example: 5.58
+    rules:
+      numeric_required: true
+      allow_nulls: false
+      decimal_max: 2
+      nonnegative_required: true
+      min_value: 0.0
+      max_value: 10000.0
+      streak_threshold: 50
+      max_delta_per_step: 100
+    notes: Activity sanity range
+
+  Time_UTC:
+    origin: Coliminder
+    raw_columns: ["Time (UTC)", "Time UTC", "Time_UTC"]
+    label: Time (UTC)
+    example: "30/11/2025 00:00"
+    rules:
+      numeric_required: false
+      allow_nulls: false
+      timestamp_format: "%d/%m/%Y %H:%M"
+    notes: Same timestamp format as Observator

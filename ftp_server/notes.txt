@@ -1,0 +1,38 @@
+def main():
+    args = parse_args()
+    log_path = os.path.join(args.output, "watchdog.log")
+    logger = build_logger(log_path)
+    engine = QCEngine(config_path=args.config, input_dir=args.input, output_dir=args.output, logger=logger)
+
+    if args.once:
+        run_once(engine)
+    if args.watch:
+        run_watch(engine, args.input, logger)
+    if not args.once and not args.watch:
+        # Default behavior: process existing files once.
+        run_once(engine)
+
+
+Test is run with python -m src.main --input data_raw --output data_out --config dq_master.yaml --once
+
+--input is also the watch folder - in our case /upload
+--once process the file once
+--output puts a watchdog.log file also -> we should stick this in blob also?
+
+We dont need a watch dog as we are hooking into the ftp server on_recieve
+so we can just call run_once (hopefully)
+
+we dont need to build_logger either as that is for the watchdog
+
+We need to create an Engine to use at start up
+
+main function here is process_directory_once 
+def process_directory_once(self) -> List[str]:
+        processed: List[str] = []
+        for file_path in list_raw_files(self.input_dir, logger=self.logger):
+            if not os.path.isfile(file_path):
+                continue
+            output = self.process_file(file_path)  - this stores the csv which we will replace with upload
+            if output:
+                processed.append(output)
+        return processed

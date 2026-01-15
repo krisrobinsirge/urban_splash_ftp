@@ -1,0 +1,4 @@
+# python cache / bytecode
+engine/src/__pycache__/
+*.pyc
+__pycache__/
