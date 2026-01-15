@@ -6,10 +6,10 @@ from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 from pyftpdlib.authorizers import DummyAuthorizer
 
-from ftp_server.logger.logger import build_logger
+from logger.logger import build_logger
 
-from ftp_server.processor.qc_engine import QCEngine
-from ftp_server.uploader.azure_uploader import AzureUploader  # import Azure uploader
+from processor.qc_engine import QCEngine
+from uploader.azure_uploader import AzureUploader  # import Azure uploader
 
 # -- Load environment from .env -- #
 load_dotenv()
@@ -77,7 +77,7 @@ def test_processor(engine: QCEngine, uploader: AzureUploader, upload_dir: str, l
     # -- upload files to azure blob -- #
 
     # raw - SUCCESS
-    from ftp_server.processor.file_funcs import list_raw_files
+    from processor.file_funcs import list_raw_files
     for file_path in list_raw_files(upload_dir, logger=logger):
         print("[INFO] uploading raw file:", file_path)
         uploader.upload_file(file_path, site=site, file_type="raw")
@@ -96,7 +96,7 @@ def main():
     # Initialize Azure uploader - default is raw container
     uploader = AzureUploader()
     # create a QC engine - inject this into the FTP handler later
-    engine = QCEngine(config_path="ftp_server/processor/dq_master.yaml", upload_dir=UPLOAD_DIR, logger=logger)
+    engine = QCEngine(config_path="processor/dq_master.yaml", upload_dir=UPLOAD_DIR, logger=logger)
 
     # -- test the processor (comment out when live) -- #
     test_processor(engine, uploader, UPLOAD_DIR, logger)
