@@ -3,6 +3,7 @@ import threading
 import traceback
 from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
+from pathlib import Path
 
 class AzureUploader:
     """Handles uploads to Azure Blob Storage with SAS token or Managed Identity,

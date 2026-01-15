@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from processor.config import DQConfig, ParameterConfig, load_config
-from processor.file_funcs import detect_origin, load_raw_csv, write_output_csv, build_clean_output_path, build_output_path, DIARY_FILENAME, UPLOAD_DIR, FLAGGED_DIR, CLEANED_DIR, COMBINED_DIR,  list_raw_files
+from processor.file_funcs import detect_origin, load_raw_csv, write_output_csv, build_clean_output_path, build_output_path, DIARY_FILENAME, UPLOAD_DIR, OUTPUT_DATA_DIR, FLAGGED_DIR, CLEANED_DIR, COMBINED_DIR,  list_raw_files
 from processor.maintenance import load_maintenance_periods, flag_maintenance
 from processor.qc_checks import (
     FAIL,
@@ -23,6 +23,7 @@ class QCEngine:
     def __init__(self, config_path: str, upload_dir: str, logger: Optional[logging.Logger]): 
         self.config_path = config_path
         self.input_dir = upload_dir
+        self.output_data_dir = OUTPUT_DATA_DIR
         self.flagged_dir = FLAGGED_DIR
         self.cleaned_dir = CLEANED_DIR 
         self.combined_dir = COMBINED_DIR
@@ -185,11 +186,12 @@ class QCEngine:
         df = pd.concat([pd.DataFrame([pass_row, fail_row]), df], ignore_index=True)
 
         # writes flagged files to uploads - question is why? 
-        flagged_output_path = build_output_path(file_path, self.flagged_dir)
+        flagged_output_path = build_output_path(file_path, self.output_data_dir +"/"+self.flagged_dir)
+
         write_output_csv(df, flagged_output_path)
 
         cleaned_df = self._build_cleaned_df(df)
-        cleaned_output_path = build_clean_output_path(file_path, self.cleaned_dir)
+        cleaned_output_path = build_clean_output_path(file_path, self.output_data_dir +"/"+self.cleaned_dir)
         write_output_csv(cleaned_df, cleaned_output_path)
         # return output_paths
         return [cleaned_output_path, flagged_output_path]

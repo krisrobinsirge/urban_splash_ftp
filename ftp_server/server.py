@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 from pyftpdlib.authorizers import DummyAuthorizer
-
+from pathlib import Path
 from logger.logger import build_logger
 
 from processor.qc_engine import QCEngine
@@ -80,13 +80,25 @@ def test_processor(engine: QCEngine, uploader: AzureUploader, upload_dir: str, l
     from processor.file_funcs import list_raw_files
     for file_path in list_raw_files(upload_dir, logger=logger):
         print("[INFO] uploading raw file:", file_path)
-        uploader.upload_file(file_path, site=site, file_type="raw")
+        uploader.upload_file(
+            file_path, 
+            site=site, 
+            file_type="raw"
+        )
 
     # clean and flagged
     for output in processed_files:
-        print("[INFO] uploading file", output)
-        file_type = output.split('/')[0]
-        uploader.upload_file(output, site=site, file_type=file_type)
+        print("output", output)
+        path = Path(output)
+        blob_path = path.relative_to("output_data")
+        file_type = blob_path.parts[0]   # raw | clean | flagged
+        print("[INFO] uploading file", output, file_type)
+        uploader.upload_file(
+            output,
+            site=site,
+            file_type=file_type
+        )
+
         
 
 def main():
