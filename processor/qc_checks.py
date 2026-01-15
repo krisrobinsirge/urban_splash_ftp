@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 import pandas as pd
 
-from ftp_server.processor.config import ParameterConfig
+from processor.config import ParameterConfig
 
 PASS = "PASS"
 FAIL = "FAIL"

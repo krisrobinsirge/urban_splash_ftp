@@ -9,8 +9,8 @@ import time
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from watchdog.observers import Observer
 
-from ftp_server.processor.file_funcs import DIARY_FILENAME, detect_origin
-from ftp_server.processor.qc_engine import QCEngine
+from processor.file_funcs import DIARY_FILENAME, detect_origin
+from processor.qc_engine import QCEngine
 
 
 def build_logger(log_path: str) -> logging.Logger:

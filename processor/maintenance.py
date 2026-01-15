@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from ftp_server.processor.qc_checks import parse_timestamp, PASS, FAIL
+from processor.qc_checks import parse_timestamp, PASS, FAIL
 
 
 @dataclass

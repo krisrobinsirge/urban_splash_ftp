@@ -5,10 +5,10 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from ftp_server.processor.config import DQConfig, ParameterConfig, load_config
-from ftp_server.processor.file_funcs import detect_origin, load_raw_csv, write_output_csv, build_clean_output_path, build_output_path, DIARY_FILENAME, UPLOAD_DIR, FLAGGED_DIR, CLEANED_DIR, COMBINED_DIR,  list_raw_files
-from ftp_server.processor.maintenance import load_maintenance_periods, flag_maintenance
-from ftp_server.processor.qc_checks import (
+from processor.config import DQConfig, ParameterConfig, load_config
+from processor.file_funcs import detect_origin, load_raw_csv, write_output_csv, build_clean_output_path, build_output_path, DIARY_FILENAME, UPLOAD_DIR, FLAGGED_DIR, CLEANED_DIR, COMBINED_DIR,  list_raw_files
+from processor.maintenance import load_maintenance_periods, flag_maintenance
+from processor.qc_checks import (
     FAIL,
     PASS,
     applicable_checks,
