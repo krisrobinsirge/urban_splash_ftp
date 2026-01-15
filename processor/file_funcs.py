@@ -12,6 +12,7 @@ CLEANED_PREFIX = "cleaned_data_"
 COMBINED_PREFIX = "combined_data_"
 DIARY_FILENAME = "Anne kanal diary.csv"
 UPLOAD_DIR = "uploads"
+OUTPUT_DATA_DIR = "output_data"
 FLAGGED_DIR = "flagged" # writes flagged data to a directroy in root
 CLEANED_DIR = "cleaned" # writes cleaned data (failed flags removed) to a directory in root
 COMBINED_DIR = "combined" # combines both Observator and Coliminder cleaned data to a directory in root
