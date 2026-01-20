@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from .config import DQConfig, ParameterConfig, load_config
-from .io import detect_origin, load_raw_csv, write_output_csv, build_output_path, DIARY_FILENAME, list_raw_files
+from .io import detect_origin, load_raw_csv, write_output_csv, build_output_path, build_clean_output_path, DIARY_FILENAME, list_raw_files
 from .maintenance import load_maintenance_periods, flag_maintenance
 from .qc_checks import (
     FAIL,
@@ -18,6 +18,7 @@ from .qc_checks import (
     normalize_column,
     parse_timestamp,
 )
+
 
 class QCEngine:
     def __init__(self, config_path: str, input_dir: str, output_dir: str, logger: Optional[logging.Logger] = None):
@@ -32,6 +33,27 @@ class QCEngine:
     def _load_maintenance_periods(self) -> List:
         diary_path = os.path.join(self.input_dir, DIARY_FILENAME)
         return load_maintenance_periods(diary_path)
+
+    def _drop_unwanted_columns(self, df: pd.DataFrame, origin: str) -> pd.DataFrame:
+        drop_targets = {
+            "Observator": {
+                "spconduscm",
+                "bgapcugl",
+                "chlorophyllugl",
+                "fdomqsu",
+            },
+        }
+        target = drop_targets.get(origin)
+        if not target:
+            return df
+        normalized = {normalize_column(col): col for col in df.columns}
+        to_drop = [col for norm, col in normalized.items() if norm in target]
+        if not to_drop:
+            return df
+        if self.logger:
+            self.logger.info("Dropping columns for %s: %s", origin, ", ".join(to_drop))
+        return df.drop(columns=to_drop)
+
 
     def _map_columns(self, df: pd.DataFrame, params: List[ParameterConfig]) -> Dict[str, str]:
         mapping: Dict[str, str] = {}
@@ -54,6 +76,16 @@ class QCEngine:
         parsed = parse_timestamp(first_value, fmt=timestamp_format)
         return 0 if parsed is None else None
 
+    def _build_cleaned_df(self, flagged_df: pd.DataFrame) -> pd.DataFrame:
+        if "overall_dq_check" not in flagged_df.columns:
+            return flagged_df.copy()
+        cleaned = flagged_df[flagged_df["overall_dq_check"] == PASS].copy()
+        drop_cols = [col for col in cleaned.columns if col.endswith("_flag") and col != "overall_dq_check"]
+        if drop_cols:
+            cleaned = cleaned.drop(columns=drop_cols)
+        return cleaned
+
+
     def process_file(self, file_path: str) -> Optional[str]:
         origin = detect_origin(file_path, logger=self.logger)
         if origin is None:
@@ -65,6 +97,7 @@ class QCEngine:
             return None
 
         df = load_raw_csv(file_path)
+        df = self._drop_unwanted_columns(df, origin)
         column_mapping = self._map_columns(df, params_for_origin)
         if not column_mapping:
             if self.logger:
@@ -150,8 +183,13 @@ class QCEngine:
 
         df = pd.concat([pd.DataFrame([pass_row, fail_row]), df], ignore_index=True)
 
-        output_path = build_output_path(file_path, self.flagged_dir)
+        output_path = build_output_path(file_path, self.output_dir)
         write_output_csv(df, output_path)
+
+        cleaned_df = self._build_cleaned_df(df)
+        cleaned_output_path = build_clean_output_path(file_path, self.output_dir)
+        write_output_csv(cleaned_df, cleaned_output_path)
+
         return output_path
 
     def process_directory_once(self) -> List[str]:

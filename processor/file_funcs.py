@@ -19,6 +19,7 @@ COMBINED_DIR = "combined" # combines both Observator and Coliminder cleaned data
 
 def detect_origin(file_path: str, logger: Optional[logging.Logger] = None) -> Optional[str]:
     name = os.path.basename(file_path).lower()
+    print(f"detecting origin {name}")
     observator_index = name.find("observator")
     coliminder_index = name.find("coliminder")
 

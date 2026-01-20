@@ -1,5 +1,8 @@
 from __future__ import annotations
+import asyncio
 import os
+import shutil
+from datetime import datetime
 from threading import Thread
 from dotenv import load_dotenv
 from pyftpdlib.handlers import FTPHandler
@@ -10,6 +13,7 @@ from logger.logger import build_logger
 
 from processor.qc_engine import QCEngine
 from uploader.azure_uploader import AzureUploader  # import Azure uploader
+from coliminder_fetcher.fetcher import fetch_coliminder_once
 
 # -- Load environment from .env -- #
 load_dotenv()
@@ -19,7 +23,9 @@ FTP_PASSWORD = os.getenv("FTP_PASSWORD", None)
 FTP_PORT = int(os.getenv("FTP_PORT", "2121"))
 
 UPLOAD_DIR = "uploads"
+RAW_INPUT_DIR = "raw_input"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(RAW_INPUT_DIR, exist_ok=True)
 
 # ftp trigger on recieved file in the /uploads directory
 # NOTE: this could be generic for other uploaders if needed
@@ -29,6 +35,7 @@ class UploadFTPHandler(FTPHandler):
     uploader: AzureUploader = None
     upload_dir: str = None
     qc_engine: QCEngine | None = None
+    logger = None
 
     def on_file_received(self, file_path):
         # Move file to uploads directory
@@ -36,18 +43,10 @@ class UploadFTPHandler(FTPHandler):
         os.rename(file_path, dest)
         print(f"[INFO] File received: {dest}", flush=True)
 
-        # -- extract site -- #
-        site = "temp_site" # dummy site for testing
-
         ###################
         ## should be a background job
         def background_job():
-            # upload the raw file
-            self.uploader.upload_file(dest, site=site, file_type="raw") # put in raw folder for the site
-
-            if self.qc_engine:
-                processed_files = self.qc_engine.process_directory_once()
-                print(processed_files)
+            process_data(self.qc_engine, self.uploader, UPLOAD_DIR, RAW_INPUT_DIR, self.logger)
 
         Thread(target=background_job, daemon=True).start()
 
@@ -63,7 +62,40 @@ def run_once(engine: QCEngine) :
         processed_files = engine.process_directory_once()  # do we need to do this or can we just process individual files?
         return processed_files
 
-def test_processor(engine: QCEngine, uploader: AzureUploader, upload_dir: str, logger):
+def archive_file(file_path: str, file_type: str, archive_root: str = "archive") -> str:
+    archive_dir = Path(archive_root) / file_type
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    src = Path(file_path)
+    target = archive_dir / src.name
+    if target.exists():
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        target = archive_dir / f"{src.stem}_{stamp}{src.suffix}"
+
+    shutil.move(str(src), str(target))
+    return str(target)
+
+
+def clear_directory(path: str) -> None:
+    root = Path(path)
+    if not root.exists():
+        return
+    for child in root.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+def copy_raw_inputs(upload_dir: str, raw_input_dir: str, logger):
+    from processor.file_funcs import list_raw_files
+    raw_input_path = Path(raw_input_dir)
+    raw_input_path.mkdir(parents=True, exist_ok=True)
+    for file_path in list_raw_files(upload_dir, logger=logger):
+        target = raw_input_path / Path(file_path).name
+        shutil.copy2(file_path, target)
+
+
+def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw_input_dir: str, logger):
     ''' 
         test the processor with upload
         place files to process in uploads directory prior to running the test
@@ -71,34 +103,70 @@ def test_processor(engine: QCEngine, uploader: AzureUploader, upload_dir: str, l
     '''
     site = "temp_site"
 
-    print(f"[INFO], testing the processor")
+
+    print(f"[INFO], preparing raw input data")
+    copy_raw_inputs(upload_dir, raw_input_dir, logger)
+
+    # fetch the coliminder data into raw_input
+    print(f"[INFO], fetching coliminder data")
+    fetched_path = fetch_coliminder_once(logger, output_dir=raw_input_dir)
+
+    print(f"[INFO], processing recieved data")
+    engine.input_dir = raw_input_dir
     processed_files = run_once(engine)
 
+    # combine? 
+
     # -- upload files to azure blob -- #
+    upload_jobs = []
 
-    # raw - SUCCESS
+    # upload raw data from raw_input
     from processor.file_funcs import list_raw_files
-    for file_path in list_raw_files(upload_dir, logger=logger):
+    for file_path in list_raw_files(raw_input_dir, logger=logger):
         print("[INFO] uploading raw file:", file_path)
-        uploader.upload_file(
-            file_path, 
-            site=site, 
-            file_type="raw"
-        )
+        upload_jobs.append((file_path, "raw"))
 
-    # clean and flagged
+    # clean and flagged observator / coliminder data
     for output in processed_files:
         print("output", output)
         path = Path(output)
         blob_path = path.relative_to("output_data")
         file_type = blob_path.parts[0]   # raw | clean | flagged
         print("[INFO] uploading file", output, file_type)
-        uploader.upload_file(
-            output,
-            site=site,
-            file_type=file_type
-        )
+        upload_jobs.append((output, file_type))
 
+    # fetched coliminder data no need to do this now
+    #if fetched_path:
+    #    print("[INFO] uploading ColiMinder file:", fetched_path)
+    #    upload_jobs.append((str(fetched_path), "coliminder"))
+
+    async def run_uploads():
+        tasks = []
+        for file_path, file_type in upload_jobs:
+            task = asyncio.to_thread(
+                uploader.upload_file,
+                file_path,
+                file_type,
+                site,
+                True,
+            )
+            tasks.append(task)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return results
+
+    results = asyncio.run(run_uploads()) if upload_jobs else []
+    all_success = True
+    for (file_path, file_type), result in zip(upload_jobs, results, strict=False):
+        ok = False if isinstance(result, Exception) else bool(result)
+        if not ok:
+            archive_file(file_path, file_type)
+            all_success = False
+
+    #if all_success:
+    #    clear_directory(upload_dir)
+    #    clear_directory(raw_input_dir)
+    #    clear_directory("output_data")
+    return processed_files, fetched_path
         
 
 def main():
@@ -108,10 +176,10 @@ def main():
     # Initialize Azure uploader - default is raw container
     uploader = AzureUploader()
     # create a QC engine - inject this into the FTP handler later
-    engine = QCEngine(config_path="processor/dq_master.yaml", upload_dir=UPLOAD_DIR, logger=logger)
+    engine = QCEngine(config_path="processor/dq_master.yaml", upload_dir=RAW_INPUT_DIR, logger=logger)
 
-    # -- test the processor (comment out when live) -- #
-    test_processor(engine, uploader, UPLOAD_DIR, logger)
+    # -- test data processing (comment out when live) -- #
+    process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger)
 
     authorizer = DummyAuthorizer()
     authorizer.add_user(
@@ -132,6 +200,7 @@ def main():
     handler.uploader = uploader
     handler.upload_dir = UPLOAD_DIR
     handler.qc_engine = engine
+    handler.logger = logger
 
     # -- Start the FTP Server -- #
     # probably need to specify the address?
