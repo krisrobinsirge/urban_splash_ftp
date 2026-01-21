@@ -245,7 +245,7 @@ parameters:
     rules:
       numeric_required: true
       allow_nulls: false
-      decimal_max: 2
+      decimal_max: 8
       nonnegative_required: true
       min_value: 0.0
       max_value: 10000.0

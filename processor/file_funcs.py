@@ -37,7 +37,13 @@ def detect_origin(file_path: str, logger: Optional[logging.Logger] = None) -> Op
 
 def load_raw_csv(file_path: str) -> pd.DataFrame:
     # Keep strings as-is to preserve formatting for decimal checks.
-    return pd.read_csv(file_path, dtype=str, keep_default_na=False)
+    return pd.read_csv(
+        file_path,
+        dtype=str,
+        keep_default_na=False,
+        sep=None,
+        engine="python",
+    )
 
 
 def write_output_csv(df: pd.DataFrame, output_path: str) -> None:

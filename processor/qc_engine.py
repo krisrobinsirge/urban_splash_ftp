@@ -1,4 +1,5 @@
 from __future__ import annotations
+import datetime
 import logging
 import os
 from typing import Dict, List, Optional, Tuple
@@ -57,6 +58,42 @@ class QCEngine:
             self.logger.info("Dropping columns for %s: %s", origin, ", ".join(to_drop))
         return df.drop(columns=to_drop)
 
+    def _uid_to_utc(self, value: str) -> str:
+        text = str(value).strip()
+        if not text:
+            return ""
+        try:
+            timestamp = int(float(text))
+        except (TypeError, ValueError):
+            return text
+        dt = datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc)
+        return dt.strftime("%d/%m/%Y %H:%M")
+
+    def _normalize_coliminder_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+        updated = False
+
+        if "UID" in df.columns and "Time (UTC)" not in df.columns:
+            df = df.copy()
+            df["UID"] = df["UID"].apply(self._uid_to_utc)
+            df = df.rename(columns={"UID": "Time (UTC)"})
+            updated = True
+
+        rename_map: Dict[str, str] = {}
+        if "activeSample" in df.columns and "Sample Numb." not in df.columns:
+            rename_map["activeSample"] = "Sample Numb."
+            updated = True
+        if "mU" in df.columns and "Activity" not in df.columns:
+            rename_map["mU"] = "Activity"
+            updated = True
+        if rename_map:
+            df = df.rename(columns=rename_map)
+
+        if updated and self.logger:
+            self.logger.info("Normalized ColiMinder column names for QC.")
+        return df
+
     def _map_columns(self, df: pd.DataFrame, params: List[ParameterConfig]) -> Dict[str, str]:
         mapping: Dict[str, str] = {}
         for param in params:
@@ -99,6 +136,8 @@ class QCEngine:
             return None
 
         df = load_raw_csv(file_path)
+        if origin == "ColiMinder":
+            df = self._normalize_coliminder_columns(df)
         df = self._drop_unwanted_columns(df, origin)
         column_mapping = self._map_columns(df, params_for_origin)
         if not column_mapping:
