@@ -159,7 +159,7 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
             all_success = False
 
     if all_success:
-    #    clear_directory(upload_dir)
+        clear_directory(upload_dir)
         clear_directory(raw_input_dir)
         clear_directory("output_data")
     return processed_files, fetched_path

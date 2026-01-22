@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire codebase (uploads excluded via .dockerignore)
 COPY . .
 
-# Ensure uploads exists at runtime
-RUN mkdir -p /app/uploads
+# Ensure runtime directories exist
+RUN mkdir -p /app/uploads /app/raw_input /app/output_data /app/archive
 
 EXPOSE 2121
 EXPOSE 30000-30010

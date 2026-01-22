@@ -92,12 +92,29 @@ This confirms the FTP server is receiving files and the callback hook is working
 remove the container if need be with docker rm -f ftp-server
 
 docker build --no-cache -t ftp-server .
-docker run --name ftp-server --env-file .env -p 2121:2121 -p 30000-30010:30000-30010 -v $(pwd)/uploads:/app/uploads ftp-server
+
+docker build -t ftp-server .
+docker run --name ftp-server --env-file .env \
+  -p 2121:2121 -p 30000-30010:30000-30010 \
+  -v $(pwd)/uploads:/app/uploads \
+  -v $(pwd)/raw_input:/app/raw_input \
+  -v $(pwd)/output_data:/app/output_data \
+  -v $(pwd)/archive:/app/archive \
+  ftp-server
+
+
 
 - push to azure container registry
 docker login rightstep.azurecr.io
-docker build -t rightstep.azurecr.io/urban_splash_ft_server_v1.0 .
+docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
 docker push rightstep.azurecr.io/urban_splash_ft_server_v1.0 
+
+### run on vm
+docker pull rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+docker run --name ftp-server --env-file /path/to/.env \
+  -p 2121:2121 -p 30000-30010:30000-30010 \
+  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+
 
 
 ## Azure cli
