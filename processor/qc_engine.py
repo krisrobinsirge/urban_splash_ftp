@@ -236,7 +236,6 @@ class QCEngine:
         return [cleaned_output_path, flagged_output_path]
 
     def process_directory_once(self) -> List[str]:
-        print("running qc engine process_directory_once")
         processed: List[str] = []
         # processes all files in the directory
         for file_path in list_raw_files(self.input_dir, logger=self.logger):
@@ -244,7 +243,6 @@ class QCEngine:
                 continue
             # returns a list [clean_output_path, flagged_output_path]
             output = self.process_file(file_path)
-            print(f"output: {output}")
             if output:
                 processed.extend(output)
         return processed

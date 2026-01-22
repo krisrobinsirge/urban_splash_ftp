@@ -19,7 +19,6 @@ COMBINED_DIR = "combined" # combines both Observator and Coliminder cleaned data
 
 def detect_origin(file_path: str, logger: Optional[logging.Logger] = None) -> Optional[str]:
     name = os.path.basename(file_path).lower()
-    print(f"detecting origin {name}")
     observator_index = name.find("observator")
     coliminder_index = name.find("coliminder")
 
@@ -68,10 +67,8 @@ def build_clean_output_path(input_path: str, output_dir: str) -> str:
 
 # this seems to work
 def list_raw_files(input_dir: str, logger: Optional[logging.Logger] = None) -> List[str]:
-    print(f"listing raw files in {input_dir}")
     paths: List[str] = []
     for entry in os.listdir(input_dir):
-        print(f"found entry: {entry}") # note this is reading the uploads directory
         entry_lower = entry.lower()
         if not entry_lower.endswith(".csv"):
             continue
@@ -79,7 +76,6 @@ def list_raw_files(input_dir: str, logger: Optional[logging.Logger] = None) -> L
             continue
         file_path = os.path.join(input_dir, entry)
         origin = detect_origin(file_path, logger=logger)
-        print(f"detected origin: {origin} for file: {file_path}")
         if origin is None:
             continue
         paths.append(file_path)

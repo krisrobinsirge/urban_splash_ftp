@@ -16,20 +16,18 @@ class AzureUploader:
         self.CONTAINER_NAME_DEFAULT = os.getenv("CONTAINER_NAME", default_container)
         self.SAS_TOKEN = os.getenv("SAS_TOKEN", "").strip()
 
-        print(self.STORAGE_ACCOUNT_NAME, self.CONTAINER_NAME_DEFAULT, self.SAS_TOKEN, flush=True)
-
         account_url = f"https://{self.STORAGE_ACCOUNT_NAME}.blob.core.windows.net"
 
         if self.SAS_TOKEN:
             # Ensure leading '?'
             if not self.SAS_TOKEN.startswith("?"):
                 self.SAS_TOKEN = "?" + self.SAS_TOKEN
-            print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
+            #print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
             self.raw_blob_service_client = BlobServiceClient(account_url, credential=self.SAS_TOKEN)
 
         else:
             # Use Managed Identity / DefaultAzureCredential
-            print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
+            #print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
             credential = DefaultAzureCredential()
             self.blob_service_client = BlobServiceClient(account_url, credential=credential)
 
