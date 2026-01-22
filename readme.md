@@ -135,7 +135,7 @@ docker run --rm --name ftp-test --env-file .env \
 
 Run indefinitely with restart:
 
-docker run -d --name ftp-server --restart always --env-file .env \
+docker run -d --name ftp-server --restart unless-stopped --env-file .env \
   -p 2121:2121 -p 30000-30010:30000-30010 \
   --cap-drop ALL \
   --memory 512m \
