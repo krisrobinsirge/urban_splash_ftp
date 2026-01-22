@@ -26,11 +26,7 @@ It is built using **pyftpdlib**, a pure-Python FTP implementation that allows th
 
 4. A Python callback (`on_file_received`) is triggered whenever a file is fully uploaded in UploadFTPHandler
 
-5. This callback can:
-   - Log file details  
-   - Perform parsing, validation, or enrichment  
-   - Trigger downstream processes  
-   - Upload to cloud storage (Azure - raw and clean containers)
+5. This callback triggers the full processing pipeline (see "Processing Pipeline").
 
 ---
 
@@ -121,11 +117,38 @@ latest deployment is for ACA without the env
 
 ## Data Cleaning Process
 
-- raw data from both servers are recieved
-- Files are named -> raw_data_Observator_ddmmyyyy_to_ddmmyyyy  (this should be done at source really)
-- step 1: flag data -> output as flagged csv currently but likely ok to be in memory
-- step 2: clean the flagged data
-- step 3: create csv and upload
+## Processing Pipeline
+
+Triggered on every FTP upload:
+
+1. Incoming Observator file lands in `uploads/`.
+2. The file is copied into `raw_input/`.
+3. ColiMinder fetcher runs and writes a ColiMinder CSV into `raw_input/`.
+4. QC engine processes all files in `raw_input/`:
+   - Outputs to `output_data/cleaned/` and `output_data/flagged/`.
+5. Combiner runs on cleaned outputs and writes combined files to:
+   - `output_data/combined/cleaned_and_combined_data_latest.csv`
+   - `output_data/combined/cleaned_and_combined_and_aligned_data_latest.csv`
+   - plus the two `*_general.csv` files for cumulative data
+6. Files are uploaded to Azure:
+   - Raw inputs -> `file_type=raw`
+   - Cleaned/flagged -> `file_type=clean` / `file_type=flagged`
+   - Combined outputs -> `file_type=combined`
+7. On full success, `uploads/`, `raw_input/`, and `output_data/` are cleared.
+8. On failed uploads, files are moved to `archive/<type>/`.
+
+## ColiMinder Fetcher
+
+The ColiMinder fetcher lives in `coliminder_fetcher/` and is configured via `.env`:
+
+- `COLIMINDER_BASE_URL`
+- `COLIMINDER_TIMESTAMP_FILENAME`
+- `COLIMINDER_CSV_FILENAME`
+- `COLIMINDER_USE_BASIC_AUTH`
+- `COLIMINDER_BASIC_AUTH_USERNAME`
+- `COLIMINDER_BASIC_AUTH_PASSWORD`
+- `COLIMINDER_PARTIAL_DOWNLOAD_DELAY_SECONDS`
+- `COLIMINDER_REQUEST_TIMEOUT_SECONDS`
 
 #### Stage 2
 - combine the two data sources (this relies on recieving the data at a similar time and also tracking what has been processed already)
