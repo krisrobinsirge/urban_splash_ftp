@@ -93,26 +93,54 @@ remove the container if need be with docker rm -f ftp-server
 
 docker build --no-cache -t ftp-server .
 
-docker build -t ftp-server .
-docker run --name ftp-server --env-file .env \
+docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
+docker run --rm --name ftp-test --env-file .env \
   -p 2121:2121 -p 30000-30010:30000-30010 \
-  -v $(pwd)/uploads:/app/uploads \
-  -v $(pwd)/raw_input:/app/raw_input \
-  -v $(pwd)/output_data:/app/output_data \
-  -v $(pwd)/archive:/app/archive \
-  ftp-server
+  --cap-drop ALL \
+  --memory 512m \
+  --cpus 1 \
+  --pids-limit 200 \
+  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+
+Run indefinitely with restart:
+
+docker run -d --name ftp-server --restart always --env-file .env \
+  -p 2121:2121 -p 30000-30010:30000-30010 \
+  --cap-drop ALL \
+  --memory 512m \
+  --cpus 1 \
+  --pids-limit 200 \
+  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+
+Hardening notes:
+- Dropping all Linux capabilities is safe for this container (no privileged ports).
+- Resource limits can be tightened/expanded based on CSV size and workload.
 
 
 
 - push to azure container registry
 docker login rightstep.azurecr.io
 docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
-docker push rightstep.azurecr.io/urban_splash_ft_server_v1.0 
+docker push rightstep.azurecr.io/urban_splash_ftp_server_v1.0 
 
 ### run on vm
 docker pull rightstep.azurecr.io/urban_splash_ftp_server_v1.0
-docker run --name ftp-server --env-file /path/to/.env \
+docker run --rm --name ftp-test --env-file .env \
   -p 2121:2121 -p 30000-30010:30000-30010 \
+  --cap-drop ALL \
+  --memory 512m \
+  --cpus 1 \
+  --pids-limit 200 \
+  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+
+Run indefinitely with restart:
+
+docker run -d --name ftp-server --restart always --env-file .env \
+  -p 2121:2121 -p 30000-30010:30000-30010 \
+  --cap-drop ALL \
+  --memory 512m \
+  --cpus 1 \
+  --pids-limit 200 \
   rightstep.azurecr.io/urban_splash_ftp_server_v1.0
 
 
