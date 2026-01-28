@@ -108,12 +108,12 @@ def copy_raw_inputs(upload_dir: str, raw_input_dir: str, logger):
     target = raw_input_path / Path(file_path).name
     shutil.copy2(file_path, target)
 
-def get_site_from_observator_filename(upload_dir: str, logger):
+def get_site_from_observator_filename(dir: str, logger):
     '''
         Filename format: site_YYYYMMDD-HHMMSS
         returns site as a string
     '''
-    file_path = get_raw_file(upload_dir, logger=logger)
+    file_path = get_raw_file(dir, logger=logger)
     p = Path(file_path)
     site = p.stem.split("_", 1)[0]
     return site 
@@ -127,11 +127,11 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
         colliminder is fetched from "api" and placed in raw_inputs
 
     '''
-    #site = "temp_site"
-    site = get_site_from_observator_filename(upload_dir=upload_dir, logger=logger)
-
-    print(f"[INFO], preparing raw input data for site: {site}")
+    # first job is to copy the file from the upload
     copy_raw_inputs(upload_dir, raw_input_dir, logger)
+
+    # get the site from the raw input data.
+    site = get_site_from_observator_filename(dir=raw_input_dir, logger=logger)
 
     # -- dont fetch coliminder until we figure out the best way to deal with it -- #
 
