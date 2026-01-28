@@ -65,7 +65,7 @@ def build_clean_output_path(input_path: str, output_dir: str) -> str:
         base = f'{CLEANED_PREFIX}{base}'
     return os.path.join(output_dir, base)
 
-# this seems to work
+# this seems to work but returns a list. in the use case there should be a single file
 def list_raw_files(input_dir: str, logger: Optional[logging.Logger] = None) -> List[str]:
     paths: List[str] = []
     for entry in os.listdir(input_dir):
@@ -80,3 +80,23 @@ def list_raw_files(input_dir: str, logger: Optional[logging.Logger] = None) -> L
             continue
         paths.append(file_path)
     return paths
+
+# helper to simply return the first file 
+def get_raw_file(input_dir: str, logger: Optional[logging.Logger] = None) -> Optional[str]:
+    for entry in os.listdir(input_dir):
+        entry_lower = entry.lower()
+
+        if not entry_lower.endswith(".csv"):
+            continue
+        if entry_lower == DIARY_FILENAME.lower():
+            continue
+
+        file_path = os.path.join(input_dir, entry)
+        origin = detect_origin(file_path, logger=logger)
+
+        if origin is None:
+            continue
+
+        return file_path  # <-- return immediately
+
+    return None

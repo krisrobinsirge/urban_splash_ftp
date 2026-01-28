@@ -16,6 +16,7 @@ from processor.qc_engine import QCEngine
 from uploader.azure_uploader import AzureUploader  # import Azure uploader
 from coliminder_fetcher.fetcher import fetch_coliminder_once
 from data_combiner.combiner import combine_cleaned
+from processor.file_funcs import list_raw_files, get_raw_file
 
 # -- Load environment from .env -- #
 load_dotenv()
@@ -91,16 +92,34 @@ def clear_directory(path: str) -> None:
         else:
             child.unlink()
 
+# this copies the uploaded file to an input directory - it is only observator at the moment 
+# as that is the only one that is FTP
 def copy_raw_inputs(upload_dir: str, raw_input_dir: str, logger):
-    from processor.file_funcs import list_raw_files
+    # there should only be one file in the uploads but potentially not if mulit site
+    
     raw_input_path = Path(raw_input_dir)
     raw_input_path.mkdir(parents=True, exist_ok=True)
-    for file_path in list_raw_files(upload_dir, logger=logger):
-        target = raw_input_path / Path(file_path).name
-        shutil.copy2(file_path, target)
 
+    # this is from the engine and possibly doesnt need to be loop as we expect one file
+    #for file_path in list_raw_files(upload_dir, logger=logger):
+    #    target = raw_input_path / Path(file_path).name # joins 
+    #    shutil.copy2(file_path, target)
+    file_path = get_raw_file(upload_dir, logger=logger)
+    target = raw_input_path / Path(file_path).name
+    shutil.copy2(file_path, target)
+
+def get_site_from_observator_filename(upload_dir: str, logger):
+    '''
+        Filename format: site_YYYYMMDD-HHMMSS
+        returns site as a string
+    '''
+    file_path = get_raw_file(upload_dir, logger=logger)
+    p = Path(file_path)
+    site = p.stem.split("_", 1)[0]
+    return site 
 
 def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw_input_dir: str, logger):
+    # potentail issue is data from different sites are recieved at the same time
     ''' 
         test the processor with upload
         place observator file to process in uploads directory prior to running the test
@@ -108,30 +127,32 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
         colliminder is fetched from "api" and placed in raw_inputs
 
     '''
-    site = "temp_site"
+    #site = "temp_site"
+    site = get_site_from_observator_filename(upload_dir=upload_dir, logger=logger)
 
-
-    print(f"[INFO], preparing raw input data")
+    print(f"[INFO], preparing raw input data for site: {site}")
     copy_raw_inputs(upload_dir, raw_input_dir, logger)
 
-    # fetch the coliminder data into raw_input
-    print(f"[INFO], fetching coliminder data")
-    fetched_path = fetch_coliminder_once(logger, output_dir=raw_input_dir)
+    # -- dont fetch coliminder until we figure out the best way to deal with it -- #
 
-    print(f"[INFO], processing recieved data")
+    # fetch the coliminder data into raw_input
+    #print(f"[INFO], fetching coliminder data")
+    #fetched_path = fetch_coliminder_once(logger, output_dir=raw_input_dir)
+
+    print(f"[INFO], processing recieved data from {site}")
     engine.input_dir = raw_input_dir
     processed_files = run_once(engine)
 
-    print("[INFO] combining cleaned data")
-    combined_outputs = combine_cleaned()
+    # -- dont combine anything yet
+    #print("[INFO] combining cleaned data")
+    #combined_outputs = combine_cleaned()
 
     # -- upload files to azure blob -- #
     upload_jobs = []
 
     # upload raw data from raw_input
-    from processor.file_funcs import list_raw_files
     for file_path in list_raw_files(raw_input_dir, logger=logger):
-        print("[INFO] uploading raw file:", file_path)
+        print(f"[INFO] uploading raw file for site {site}:", file_path)
         upload_jobs.append((file_path, "raw"))
 
     # clean and flagged observator / coliminder data
@@ -139,12 +160,12 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
         path = Path(output)
         blob_path = path.relative_to("output_data")
         file_type = blob_path.parts[0]   # raw | clean | flagged
-        print("[INFO] uploading file", output, file_type)
+        print(f"[INFO] uploading processed files for site {site}", output, file_type)
         upload_jobs.append((output, file_type))
 
-    for output in combined_outputs:
-        print("[INFO] uploading combined file", output)
-        upload_jobs.append((str(output), "combined"))
+    #for output in combined_outputs:
+    #    print("[INFO] uploading combined file", output)
+    #    upload_jobs.append((str(output), "combined"))
 
     async def run_uploads():
         tasks = []
@@ -169,10 +190,10 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
             all_success = False
 
     if all_success:
-        clear_directory(upload_dir)
+    #    clear_directory(upload_dir) remove this when live
         clear_directory(raw_input_dir)
         clear_directory("output_data")
-    return processed_files, fetched_path
+    return processed_files #, fetched_path
         
 
 def main():
@@ -185,7 +206,7 @@ def main():
     engine = QCEngine(config_path="processor/dq_master.yaml", upload_dir=RAW_INPUT_DIR, logger=logger)
 
     # -- test data processing (comment out when live) -- #
-    #process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger)
+    process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger)
 
     authorizer = DummyAuthorizer()
     authorizer.add_user(
