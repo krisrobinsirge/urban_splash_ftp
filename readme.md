@@ -82,7 +82,6 @@ The server console prints a message similar to:
 >>> CALLBACK FIRED
 File received: uploads/test_file.txt (size: 128 bytes)
 
-
 This confirms the FTP server is receiving files and the callback hook is working.
 
 
@@ -94,6 +93,7 @@ remove the container if need be with docker rm -f ftp-server
 docker build --no-cache -t ftp-server .
 
 docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
+
 docker run --rm --name ftp-test --env-file .env \
   -p 2121:2121 -p 30000-30010:30000-30010 \
   --cap-drop ALL \
@@ -116,8 +116,6 @@ Hardening notes:
 - Dropping all Linux capabilities is safe for this container (no privileged ports).
 - Resource limits can be tightened/expanded based on CSV size and workload.
 
-
-
 - push to azure container registry
 docker login rightstep.azurecr.io
 docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
@@ -125,13 +123,6 @@ docker push rightstep.azurecr.io/urban_splash_ftp_server_v1.0
 
 ### run on vm
 docker pull rightstep.azurecr.io/urban_splash_ftp_server_v1.0
-docker run --rm --name ftp-test --env-file .env \
-  -p 2121:2121 -p 30000-30010:30000-30010 \
-  --cap-drop ALL \
-  --memory 512m \
-  --cpus 1 \
-  --pids-limit 200 \
-  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
 
 Run indefinitely with restart:
 

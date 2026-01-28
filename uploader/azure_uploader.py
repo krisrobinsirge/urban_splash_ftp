@@ -22,12 +22,12 @@ class AzureUploader:
             # Ensure leading '?'
             if not self.SAS_TOKEN.startswith("?"):
                 self.SAS_TOKEN = "?" + self.SAS_TOKEN
-            #print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
-            self.raw_blob_service_client = BlobServiceClient(account_url, credential=self.SAS_TOKEN)
+            print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
+            self.blob_service_client = BlobServiceClient(account_url, credential=self.SAS_TOKEN)
 
         else:
             # Use Managed Identity / DefaultAzureCredential
-            #print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
+            print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
             credential = DefaultAzureCredential()
             self.blob_service_client = BlobServiceClient(account_url, credential=credential)
 
@@ -75,7 +75,7 @@ class AzureUploader:
             return False
 
         try:
-            container_client = self.raw_blob_service_client.get_container_client(container_name)
+            container_client = self.blob_service_client.get_container_client(container_name)
 
             with open(file_path, "rb") as data:
                 container_client.upload_blob(
