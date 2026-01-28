@@ -7,34 +7,35 @@ import pandas as pd
 import pytest
 
 from src.config import load_config
-from src.io import detect_origin, list_raw_files, load_raw_csv
+from src.io import detect_origin, list_raw_files, load_raw_csv, build_clean_output_path
 from src.qc_checks import evaluate_parameter, applicable_checks
 from src.qc_engine import QCEngine
 
 
-def test_raw_column_mapping_matches_sample_files():
+def test_drop_unwanted_observator_columns_removed_before_mapping():
     engine = QCEngine(config_path="dq_master.yaml", input_dir="data_raw", output_dir="data_out")
     config = load_config("dq_master.yaml")
+    df = pd.DataFrame(
+        {
+            "SpCond uS/cm": ["1"],
+            "BGA PC ug/L": ["1"],
+            "Chlorophyll ug/L": ["1"],
+            "fDOM QSU": ["1"],
+            "Temp (C)": ["2"],
+            "TimeStamp": ["30/11/2025 00:00"],
+        }
+    )
 
-    obs_candidates = list(Path("data_raw").glob("*Observator*.csv"))
-    if not obs_candidates:
-        pytest.skip("No Observator sample CSV present in data_raw")
-    obs_df = load_raw_csv(str(obs_candidates[0]))
+    cleaned_df = engine._drop_unwanted_columns(df, "Observator")
+    assert set(cleaned_df.columns) == {"Temp (C)", "TimeStamp"}
+
     obs_params = config.parameters_for_origin("Observator")
-    obs_mapping = engine._map_columns(obs_df, obs_params)
-    assert obs_mapping["SpCond_uScm"] == "SpCond uS/cm"
-    assert obs_mapping["BGA_PC_RFU"] == "BGA PC RFU"
-    assert obs_mapping["Chlorophyll_RFU"] == "Chlorophyll RFU"
-
-    coli_candidates = list(Path("data_raw").glob("*ColiMinder*.csv"))
-    if not coli_candidates:
-        pytest.skip("No ColiMinder sample CSV present in data_raw")
-    coli_df = load_raw_csv(str(coli_candidates[0]))
-    coli_params = config.parameters_for_origin("ColiMinder")
-    coli_mapping = engine._map_columns(coli_df, coli_params)
-    assert coli_mapping["Sample_Numb"] in {"Sample Numb.", "Sample Numb", "Sample Number"}
-    assert coli_mapping["Activity"] == "Activity"
-    assert coli_mapping["Time_UTC"] in {"Time (UTC)", "Time UTC", "Time_UTC"}
+    mapping = engine._map_columns(cleaned_df, obs_params)
+    assert "SpCond_uScm" not in mapping
+    assert "BGA_PC_ugL" not in mapping
+    assert "Chlorophyll_ugL" not in mapping
+    assert "fDOM_QSU" not in mapping
+    assert mapping["Temp_C"] == "Temp (C)"
 
 
 def test_sample_numb_allowed_values_pass_and_fail():
@@ -173,3 +174,24 @@ def _build_capture_logger():
     handler.setLevel(logging.INFO)
     logger.addHandler(handler)
     return logger, stream
+
+def test_cleaned_output_filters_and_strips_flags(tmp_path):
+    input_dir = tmp_path / "data_raw"
+    output_dir = tmp_path / "data_out"
+    input_dir.mkdir()
+    output_dir.mkdir()
+
+    csv_path = input_dir / "raw_data_Observator_test.csv"
+    csv_path.write_text("TimeStamp,Temp (C)\n30/11/2025 00:00,10\n30/11/2025 00:05,50\n", encoding="utf-8")
+
+    engine = QCEngine(config_path="dq_master.yaml", input_dir=str(input_dir), output_dir=str(output_dir))
+    flagged_path = engine.process_file(str(csv_path))
+    assert flagged_path is not None
+    cleaned_path = build_clean_output_path(str(csv_path), str(output_dir))
+
+    cleaned_df = pd.read_csv(cleaned_path, dtype=str)
+    assert not cleaned_df.empty
+    assert set(cleaned_df["overall_dq_check"]) == {"PASS"}
+    assert any(col == "origin" for col in cleaned_df.columns)
+    assert all(not col.endswith("_flag") or col == "overall_dq_check" for col in cleaned_df.columns)
+    assert len(cleaned_df) == 1

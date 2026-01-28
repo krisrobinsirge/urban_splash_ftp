@@ -1,0 +1,5 @@
+.venv/
+downloads/
+state/
+coliminder_fetch.log
+__pycache__/

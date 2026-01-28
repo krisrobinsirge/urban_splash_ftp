@@ -16,36 +16,43 @@ class AzureUploader:
         self.CONTAINER_NAME_DEFAULT = os.getenv("CONTAINER_NAME", default_container)
         self.SAS_TOKEN = os.getenv("SAS_TOKEN", "").strip()
 
-        print(self.STORAGE_ACCOUNT_NAME, self.CONTAINER_NAME_DEFAULT, self.SAS_TOKEN, flush=True)
-
         account_url = f"https://{self.STORAGE_ACCOUNT_NAME}.blob.core.windows.net"
 
         if self.SAS_TOKEN:
             # Ensure leading '?'
             if not self.SAS_TOKEN.startswith("?"):
                 self.SAS_TOKEN = "?" + self.SAS_TOKEN
-            print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
+            #print(f"[INFO] Using RAW SAS token for Azure Blob", flush=True)
             self.raw_blob_service_client = BlobServiceClient(account_url, credential=self.SAS_TOKEN)
 
         else:
             # Use Managed Identity / DefaultAzureCredential
-            print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
+            #print(f"[INFO] Using DefaultAzureCredential (Managed Identity) for Azure Blob", flush=True)
             credential = DefaultAzureCredential()
             self.blob_service_client = BlobServiceClient(account_url, credential=credential)
 
-    def upload_file(self, file_path,  file_type, site=None):
-        """Uploads a file in a separate daemon thread.
-            container_name: optional, defaults to self.CONTAINER_NAME_DEFAULT
+    def upload_file(self, file_path, file_type, site=None, blocking=False):
+        """Uploads a file.
             site: the site where data was recieved from
-            file_type:  raw, clean, flagged
+            file_type: raw, clean, flagged, coliminder
+            blocking: when True, upload synchronously and return success/failure
 
         """
-        if site:
-            target_container = self.CONTAINER_NAME_DEFAULT
-            thread = threading.Thread(target=self._upload, args=(file_path, target_container, site, file_type), daemon=True)
-            thread.start()
-        else:
+        if not site:
             print(f"[ERROR] Unknown site '{site}'", flush=True)
+            return False if blocking else None
+
+        target_container = self.CONTAINER_NAME_DEFAULT
+        if blocking:
+            return self._upload(file_path, target_container, site, file_type)
+
+        thread = threading.Thread(
+            target=self._upload,
+            args=(file_path, target_container, site, file_type),
+            daemon=True,
+        )
+        thread.start()
+        return None
 
     def _upload(self, file_path, container_name, site, file_type):
         """
@@ -65,7 +72,7 @@ class AzureUploader:
 
         if container_name != "data":
             print(f"[ERROR] Unknown container '{container_name}'", flush=True)
-            return
+            return False
 
         try:
             container_client = self.raw_blob_service_client.get_container_client(container_name)
@@ -81,11 +88,11 @@ class AzureUploader:
                 f"[SUCCESS] Uploaded to data/{blob_name}",
                 flush=True
             )
-
+            return True
         except Exception as e:
             print(
                 f"[ERROR] Failed to upload {filename} to '{container_name}': {e}",
                 flush=True
             )
             traceback.print_exc()
-
+            return False

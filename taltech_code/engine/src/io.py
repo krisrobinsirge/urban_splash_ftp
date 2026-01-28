@@ -8,6 +8,7 @@ import pandas as pd
 
 RAW_PREFIX = "raw_data_"
 FLAGGED_PREFIX = "flagged_data_"
+CLEANED_PREFIX = "cleaned_data_"
 DIARY_FILENAME = "Anne kanal diary.csv"
 
 
@@ -44,6 +45,15 @@ def build_output_path(input_path: str, output_dir: str) -> str:
         base = base.replace(RAW_PREFIX, FLAGGED_PREFIX, 1)
     else:
         base = f"{FLAGGED_PREFIX}{base}"
+    return os.path.join(output_dir, base)
+
+
+def build_clean_output_path(input_path: str, output_dir: str) -> str:
+    base = os.path.basename(input_path)
+    if base.startswith(RAW_PREFIX):
+        base = base.replace(RAW_PREFIX, CLEANED_PREFIX, 1)
+    else:
+        base = f'{CLEANED_PREFIX}{base}'
     return os.path.join(output_dir, base)
 
 
