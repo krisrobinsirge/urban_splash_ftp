@@ -255,7 +255,7 @@ parameters:
 
   Time_UTC:
     origin: Coliminder
-    raw_columns: ["Time (UTC)", "Time UTC", "Time_UTC"]
+    raw_columns: ["Time (UTC)", "Time UTC", "Time_UTC", "Timestamp (UTC)", "Timestamp UTC"]
     label: Time (UTC)
     example: "30/11/2025 00:00"
     rules:

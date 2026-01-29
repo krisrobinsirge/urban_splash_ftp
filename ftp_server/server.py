@@ -15,8 +15,8 @@ from logger.logger import build_logger
 from processor.qc_engine import QCEngine
 from uploader.azure_uploader import AzureUploader  # import Azure uploader
 from coliminder_fetcher.fetcher import fetch_coliminder_once
-from data_combiner.combiner import combine_cleaned
-from processor.file_funcs import list_raw_files, get_raw_file
+from processor.coliminder_merge import merge_coliminder_into_file
+from processor.file_funcs import extract_site_from_filename, get_raw_file
 
 # -- Load environment from .env -- #
 load_dotenv()
@@ -26,20 +26,21 @@ FTP_PASSWORD = os.getenv("FTP_PASSWORD", None)
 FTP_PORT = int(os.getenv("FTP_PORT", "2121"))
 FTP_MASQUERADE_ADDRESS = os.getenv("FTP_MASQUERADE_ADDRESS", None)
 FTP_PASSIVE_PORTS = os.getenv("FTP_PASSIVE_PORTS", "30000-30010")
+ENABLE_AZURE_UPLOADS = os.getenv("ENABLE_AZURE_UPLOADS", "false").strip().lower() == "true"
 
 UPLOAD_DIR = "uploads"
 RAW_INPUT_DIR = "raw_input"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RAW_INPUT_DIR, exist_ok=True)
 
-processing_queue: "Queue[None]" = Queue()
+processing_queue: "Queue[str]" = Queue()
 
 def start_processing_worker(engine: QCEngine, uploader: AzureUploader, logger) -> None:
     def worker():
         while True:
-            processing_queue.get()
+            file_path = processing_queue.get()
             try:
-                process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger)
+                process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger, file_path)
             finally:
                 processing_queue.task_done()
     Thread(target=worker, daemon=True).start()
@@ -60,13 +61,13 @@ class UploadFTPHandler(FTPHandler):
         os.rename(file_path, dest)
         print(f"[INFO] File received: {dest}", flush=True)
 
-        processing_queue.put(None)
+        processing_queue.put(dest)
 
     
 # -- Testing the processing and upload -- #
-def run_once(engine: QCEngine) :
-        processed_files = engine.process_directory_once()  # do we need to do this or can we just process individual files?
-        return processed_files
+def run_once(engine: QCEngine, file_path: str):
+    processed_files = engine.process_file(file_path)
+    return processed_files or []
 
 def archive_file(file_path: str, file_type: str, archive_root: str = "archive") -> str:
     archive_dir = Path(archive_root) / file_type
@@ -94,31 +95,27 @@ def clear_directory(path: str) -> None:
 
 # this copies the uploaded file to an input directory - it is only observator at the moment 
 # as that is the only one that is FTP
-def copy_raw_inputs(upload_dir: str, raw_input_dir: str, logger):
-    # there should only be one file in the uploads but potentially not if mulit site
-    
+def copy_raw_input(file_path: str, raw_input_dir: str) -> Path:
     raw_input_path = Path(raw_input_dir)
     raw_input_path.mkdir(parents=True, exist_ok=True)
-
-    # this is from the engine and possibly doesnt need to be loop as we expect one file
-    #for file_path in list_raw_files(upload_dir, logger=logger):
-    #    target = raw_input_path / Path(file_path).name # joins 
-    #    shutil.copy2(file_path, target)
-    file_path = get_raw_file(upload_dir, logger=logger)
     target = raw_input_path / Path(file_path).name
     shutil.copy2(file_path, target)
+    return target
 
-def get_site_from_observator_filename(dir: str, logger):
-    '''
-        Filename format: site_YYYYMMDD-HHMMSS
-        returns site as a string
-    '''
-    file_path = get_raw_file(dir, logger=logger)
-    p = Path(file_path)
-    site = p.stem.split("_", 1)[0]
-    return site 
 
-def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw_input_dir: str, logger):
+def get_site_from_filename(file_path: str) -> str:
+    site = extract_site_from_filename(file_path)
+    return site or "unknown"
+
+
+def process_data(
+    engine: QCEngine,
+    uploader: AzureUploader,
+    upload_dir: str,
+    raw_input_dir: str,
+    logger,
+    ftp_file_path: str,
+):
     # potentail issue is data from different sites are recieved at the same time
     ''' 
         test the processor with upload
@@ -127,73 +124,70 @@ def process_data(engine: QCEngine, uploader: AzureUploader, upload_dir: str, raw
         colliminder is fetched from "api" and placed in raw_inputs
 
     '''
-    # first job is to copy the file from the upload
-    copy_raw_inputs(upload_dir, raw_input_dir, logger)
+    if not ftp_file_path or not os.path.exists(ftp_file_path):
+        logger.warning("No FTP file path provided; skipping processing.")
+        return []
 
-    # get the site from the raw input data.
-    site = get_site_from_observator_filename(dir=raw_input_dir, logger=logger)
+    raw_input_path = copy_raw_input(ftp_file_path, raw_input_dir)
 
-    # -- dont fetch coliminder until we figure out the best way to deal with it -- #
+    site = get_site_from_filename(raw_input_path)
+    print(f"[INFO] Processing received data from {site}", flush=True)
 
-    # fetch the coliminder data into raw_input
-    #print(f"[INFO], fetching coliminder data")
-    #fetched_path = fetch_coliminder_once(logger, output_dir=raw_input_dir)
+    print(f"[INFO] Fetching Coliminder data for {site}", flush=True)
+    fetched_path = fetch_coliminder_once(logger, output_dir=raw_input_dir, site=site)
+    merged = merge_coliminder_into_file(raw_input_path, fetched_path, logger=logger)
+    if not merged:
+        print("[INFO] No Coliminder rows merged (columns left empty).", flush=True)
 
-    print(f"[INFO], processing recieved data from {site}")
-    engine.input_dir = raw_input_dir
-    processed_files = run_once(engine)
+    # copy updated raw file back to uploads so it is the combined file
+    target_upload = Path(upload_dir) / raw_input_path.name
+    shutil.copy2(raw_input_path, target_upload)
+
+    processed_files = run_once(engine, str(raw_input_path))
 
     # -- dont combine anything yet
     #print("[INFO] combining cleaned data")
     #combined_outputs = combine_cleaned()
 
-    # -- upload files to azure blob -- #
-    upload_jobs = []
+    if ENABLE_AZURE_UPLOADS:
+        upload_jobs = []
+        upload_jobs.append((raw_input_path, "raw"))
 
-    # upload raw data from raw_input
-    for file_path in list_raw_files(raw_input_dir, logger=logger):
-        print(f"[INFO] uploading raw file for site {site}:", file_path)
-        upload_jobs.append((file_path, "raw"))
+        for output in processed_files:
+            path = Path(output)
+            blob_path = path.relative_to("output_data")
+            file_type = blob_path.parts[0]   # raw | clean | flagged
+            print(f"[INFO] uploading processed files for site {site}", output, file_type)
+            upload_jobs.append((output, file_type))
 
-    # clean and flagged observator / coliminder data
-    for output in processed_files:
-        path = Path(output)
-        blob_path = path.relative_to("output_data")
-        file_type = blob_path.parts[0]   # raw | clean | flagged
-        print(f"[INFO] uploading processed files for site {site}", output, file_type)
-        upload_jobs.append((output, file_type))
+        async def run_uploads():
+            tasks = []
+            for file_path, file_type in upload_jobs:
+                task = asyncio.to_thread(
+                    uploader.upload_file,
+                    str(file_path),
+                    file_type,
+                    site,
+                    True,
+                )
+                tasks.append(task)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return results
 
-    #for output in combined_outputs:
-    #    print("[INFO] uploading combined file", output)
-    #    upload_jobs.append((str(output), "combined"))
+        results = asyncio.run(run_uploads()) if upload_jobs else []
+        all_success = True
+        for (file_path, file_type), result in zip(upload_jobs, results, strict=False):
+            ok = False if isinstance(result, Exception) else bool(result)
+            if not ok:
+                archive_file(str(file_path), file_type)
+                all_success = False
 
-    async def run_uploads():
-        tasks = []
-        for file_path, file_type in upload_jobs:
-            task = asyncio.to_thread(
-                uploader.upload_file,
-                file_path,
-                file_type,
-                site,
-                True,
-            )
-            tasks.append(task)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        return results
-
-    results = asyncio.run(run_uploads()) if upload_jobs else []
-    all_success = True
-    for (file_path, file_type), result in zip(upload_jobs, results, strict=False):
-        ok = False if isinstance(result, Exception) else bool(result)
-        if not ok:
-            archive_file(file_path, file_type)
-            all_success = False
-
-    if all_success:
-        #clear_directory(upload_dir) #uncomment this when live
+        if all_success:
+            clear_directory(raw_input_dir)
+    else:
         clear_directory(raw_input_dir)
-        clear_directory("output_data")
-    return processed_files #, fetched_path
+
+    return processed_files
         
 
 def main():
@@ -206,7 +200,9 @@ def main():
     engine = QCEngine(config_path="processor/dq_master.yaml", upload_dir=RAW_INPUT_DIR, logger=logger)
 
     # -- test data processing (comment out when live) -- #
-    process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger)
+    seed_path = get_raw_file(UPLOAD_DIR, logger=logger)
+    if seed_path:
+        process_data(engine, uploader, UPLOAD_DIR, RAW_INPUT_DIR, logger, seed_path)
 
     authorizer = DummyAuthorizer()
     authorizer.add_user(
