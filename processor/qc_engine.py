@@ -131,14 +131,18 @@ class QCEngine:
             return None
 
         config = self._reload_config()
-        params_for_origin = config.parameters_for_origin(origin)
+        if origin == "Combined":
+            params_for_origin = config.parameters
+        else:
+            params_for_origin = config.parameters_for_origin(origin)
         if not params_for_origin:
             return None
 
         df = load_raw_csv(file_path)
         if origin == "ColiMinder":
             df = self._normalize_coliminder_columns(df)
-        df = self._drop_unwanted_columns(df, origin)
+        drop_origin = "Observator" if origin == "Combined" else origin
+        df = self._drop_unwanted_columns(df, drop_origin)
         column_mapping = self._map_columns(df, params_for_origin)
         if not column_mapping:
             if self.logger:
@@ -172,7 +176,14 @@ class QCEngine:
             if param.key not in column_mapping:
                 continue
             series = df[column_mapping[param.key]]
-            flag_columns, qc_flags = evaluate_parameter(series, param, config.checks, metadata_index)
+            missing_ok = origin == "Combined" and param.origin.lower() == "coliminder"
+            flag_columns, qc_flags = evaluate_parameter(
+                series,
+                param,
+                config.checks,
+                metadata_index,
+                missing_ok=missing_ok,
+            )
             for col_name, values in flag_columns.items():
                 new_columns[col_name] = values
             new_columns[f"{param.key}_qc_flag"] = qc_flags

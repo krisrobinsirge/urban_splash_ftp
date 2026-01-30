@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import logging
+from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
@@ -17,6 +19,8 @@ FLAGGED_DIR = "flagged" # writes flagged data to a directroy in root
 CLEANED_DIR = "cleaned" # writes cleaned data (failed flags removed) to a directory in root
 COMBINED_DIR = "combined" # combines both Observator and Coliminder cleaned data to a directory in root
 
+SITE_FILE_RE = re.compile(r"^(?P<site>[a-z0-9]+)_(\d{8})_(\d{6})$", re.IGNORECASE)
+
 def detect_origin(file_path: str, logger: Optional[logging.Logger] = None) -> Optional[str]:
     name = os.path.basename(file_path).lower()
     observator_index = name.find("observator")
@@ -31,7 +35,19 @@ def detect_origin(file_path: str, logger: Optional[logging.Logger] = None) -> Op
         origin = "ColiMinder"
         if observator_index != -1 and logger:
             logger.warning("Filename contains both origins; choosing ColiMinder for %s", file_path)
+    else:
+        stem = Path(file_path).stem
+        if SITE_FILE_RE.match(stem):
+            origin = "Combined"
     return origin
+
+
+def extract_site_from_filename(file_path: str) -> Optional[str]:
+    stem = Path(file_path).stem
+    match = SITE_FILE_RE.match(stem)
+    if not match:
+        return None
+    return match.group("site")
 
 
 def load_raw_csv(file_path: str) -> pd.DataFrame:
@@ -51,6 +67,11 @@ def write_output_csv(df: pd.DataFrame, output_path: str) -> None:
 
 def build_output_path(input_path: str, output_dir: str) -> str:
     base = os.path.basename(input_path)
+    stem = Path(base).stem
+    if SITE_FILE_RE.match(stem):
+        if not base.lower().startswith("flagged_"):
+            base = f"flagged_{base}"
+        return os.path.join(output_dir, base)
     if base.startswith(RAW_PREFIX):
         base = base.replace(RAW_PREFIX, FLAGGED_PREFIX, 1)
     else:
@@ -59,6 +80,11 @@ def build_output_path(input_path: str, output_dir: str) -> str:
 
 def build_clean_output_path(input_path: str, output_dir: str) -> str:
     base = os.path.basename(input_path)
+    stem = Path(base).stem
+    if SITE_FILE_RE.match(stem):
+        if not base.lower().startswith("cleaned_"):
+            base = f"cleaned_{base}"
+        return os.path.join(output_dir, base)
     if base.startswith(RAW_PREFIX):
         base = base.replace(RAW_PREFIX, CLEANED_PREFIX, 1)
     else:

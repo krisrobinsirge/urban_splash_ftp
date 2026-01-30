@@ -100,6 +100,7 @@ def evaluate_parameter(
     param: ParameterConfig,
     global_checks: Dict[str, bool],
     metadata_index: Optional[int],
+    missing_ok: bool = False,
 ) -> Tuple[Dict[str, List[str]], List[str]]:
     rules = param.rules or {}
     checks_to_run = applicable_checks(param, global_checks)
@@ -129,13 +130,13 @@ def evaluate_parameter(
 
         for check in checks_to_run:
             if check == "completeness":
-                row_results[f"{param.key}_completeness_flag"] = PASS if not missing else FAIL
+                row_results[f"{param.key}_completeness_flag"] = PASS if (not missing or missing_ok) else FAIL
             elif check == "numeric":
-                row_results[f"{param.key}_numeric_flag"] = PASS if numeric_val is not None else FAIL
+                row_results[f"{param.key}_numeric_flag"] = PASS if (numeric_val is not None or missing_ok) else FAIL
             elif check == "format":
                 decimal_max = rules.get("decimal_max")
                 if numeric_val is None:
-                    row_results[f"{param.key}_format_flag"] = FAIL
+                    row_results[f"{param.key}_format_flag"] = PASS if missing_ok else FAIL
                 else:
                     decimals = count_decimals(raw)
                     row_results[f"{param.key}_format_flag"] = PASS if decimals <= decimal_max else FAIL
@@ -143,14 +144,14 @@ def evaluate_parameter(
                 min_val = rules.get("min_value")
                 max_val = rules.get("max_value")
                 if numeric_val is None:
-                    row_results[f"{param.key}_range_flag"] = FAIL
+                    row_results[f"{param.key}_range_flag"] = PASS if missing_ok else FAIL
                 else:
                     too_low = min_val is not None and numeric_val < float(min_val)
                     too_high = max_val is not None and numeric_val > float(max_val)
                     row_results[f"{param.key}_range_flag"] = FAIL if too_low or too_high else PASS
             elif check == "nonnegative":
                 if numeric_val is None:
-                    row_results[f"{param.key}_nonnegative_flag"] = FAIL
+                    row_results[f"{param.key}_nonnegative_flag"] = PASS if missing_ok else FAIL
                 else:
                     row_results[f"{param.key}_nonnegative_flag"] = PASS if numeric_val >= 0 else FAIL
             elif check == "spike":
@@ -185,7 +186,7 @@ def evaluate_parameter(
             elif check == "allowed_values":
                 allowed = rules.get("allowed_values") or []
                 if missing:
-                    row_results[f"{param.key}_allowed_values_flag"] = FAIL
+                    row_results[f"{param.key}_allowed_values_flag"] = PASS if missing_ok else FAIL
                 else:
                     raw_text = str(raw).strip()
                     allowed_match = False
