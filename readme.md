@@ -5,6 +5,9 @@
 This component provides a lightweight, container-friendly FTP server used to receive inbound files from external systems.  
 It is built using **pyftpdlib**, a pure-Python FTP implementation that allows the application to trigger custom Python logic whenever a file is received.
 
+pyftpdlib reference
+https://pyftpdlib.readthedocs.io/en/latest/api.html
+
 ### ✨ Key Features
 
 - **Embedded FTP server** (no external FTP daemon required)
@@ -24,7 +27,7 @@ It is built using **pyftpdlib**, a pure-Python FTP implementation that allows th
 
 3. Files are automatically moved into the `/uploads` directory.
 
-4. A Python callback (`on_file_received`) is triggered whenever a file is fully uploaded in UploadFTPHandler
+4. A Python callback is triggered when the ftp renames the file (initially uploaded as a temp file with $$$ extension)
 
 5. This callback triggers the full processing pipeline (see "Processing Pipeline").
 
