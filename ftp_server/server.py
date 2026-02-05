@@ -18,6 +18,21 @@ from coliminder_fetcher.fetcher import fetch_coliminder_once
 from processor.coliminder_merge import merge_coliminder_into_file
 from processor.file_funcs import extract_site_from_filename, get_raw_file
 
+
+## notes:
+# secure against brute force login 
+# handler.max_login_attempts = 3
+# handler.timeout = 30
+# disable active mode via the callbacks 
+#def ftp_PORT(self, line):
+#    self.log("Blocked active FTP request: PORT %s" % line)
+#    self.respond("502 Active mode not supported. Use PASV.")
+
+#def ftp_EPRT(self, line):
+
+#    self.respond("502 Active mode not supported. Use PASV.")
+
+
 # -- Load environment from .env -- #
 load_dotenv()
 
@@ -116,7 +131,7 @@ def process_data(
     logger,
     ftp_file_path: str,
 ):
-    # potentail issue is data from different sites are recieved at the same time
+    # potential issue is data from different sites are recieved at the same time
     ''' 
         test the processor with upload
         place observator file to process in uploads directory prior to running the test
@@ -184,8 +199,10 @@ def process_data(
 
         if all_success:
             clear_directory(raw_input_dir)
+            clear_directory(upload_dir)
     else:
         clear_directory(raw_input_dir)
+        clear_directory(upload_dir)
 
     return processed_files
         
@@ -209,7 +226,7 @@ def main():
         FTP_USERNAME,
         FTP_PASSWORD,
         homedir=UPLOAD_DIR,
-        perm="elwm"
+        perm="elwmfd"
     )
 
     handler = UploadFTPHandler

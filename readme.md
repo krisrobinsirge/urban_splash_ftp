@@ -122,17 +122,18 @@ docker build -t rightstep.azurecr.io/urban_splash_ftp_server_v1.0 .
 docker push rightstep.azurecr.io/urban_splash_ftp_server_v1.0 
 
 ### run on vm
+az login --identity -- client-id <client id>
+az acr login --name rightstep
 docker pull rightstep.azurecr.io/urban_splash_ftp_server_v1.0
 
 Run indefinitely with restart:
 
-docker run -d --name ftp-server --restart unless-stopped --env-file .env \
-  -p 2121:2121 -p 30000-30010:30000-30010 \
-  --cap-drop ALL \
-  --memory 512m \
-  --cpus 1 \
-  --pids-limit 200 \
-  rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+assumes .env file is correctly placed with correct permissions
+
+docker run -d --name ftp-server --restart unless-stopped   --env-file /opt/urban_splash/.env   -p 2121:2121   -p 30000-31000:30000-31000   --cap-drop ALL   --memory 512m   --cpus 1   --pids-limit 200   rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+
+
+
 
 
 
