@@ -130,11 +130,11 @@ Run indefinitely with restart:
 
 assumes .env file is correctly placed with correct permissions
 
-docker run -d --name ftp-server --restart unless-stopped   --env-file /opt/urban_splash/.env   -p 2121:2121   -p 30000-31000:30000-31000   --cap-drop ALL   --memory 512m   --cpus 1   --pids-limit 200   rightstep.azurecr.io/urban_splash_ftp_server_v1.0
+docker run -d --name ftp-server --restart unless-stopped   --env-file /opt/urban_splash/.env   -p 2121:2121   -p 30000-30010:30000-30010   --cap-drop ALL   --memory 512m   --cpus 1   --pids-limit 200   rightstep.azurecr.io/urban_splash_ftp_server_v1.0
 
 
-
-
+uploads directory permissions could need changing to allow name change operations (maybe not)
+chmod 775 /app/uploads
 
 
 ## Azure cli

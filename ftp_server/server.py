@@ -63,20 +63,44 @@ def start_processing_worker(engine: QCEngine, uploader: AzureUploader, logger) -
 # ftp trigger on recieved file in the /uploads directory
 # NOTE: this could be generic for other uploaders if needed
 class UploadFTPHandler(FTPHandler):
-    """Custom FTP handler that triggers Azure uploads."""
-
     uploader: AzureUploader = None
     upload_dir: str = None
     qc_engine: QCEngine | None = None
     logger = None
 
     def on_file_received(self, file_path):
-        # Move file to uploads directory
-        dest = os.path.join(self.upload_dir, os.path.basename(file_path))
-        os.rename(file_path, dest)
-        print(f"[INFO] File received: {dest}", flush=True)
+        # Keep as debug (you'll see temp.$$$ here)
+        self.log(f"[DEBUG] on_file_received: {file_path}")
 
-        processing_queue.put(dest)
+    def ftp_RNFR(self, path):
+        # remember source for logging / debugging
+        self._last_rnfr = path
+        return super().ftp_RNFR(path)
+
+    def ftp_RNTO(self, path):
+        # path is the *destination* (final name) requested by client
+        src = getattr(self, "_last_rnfr", None)
+        dst = path
+
+        # perform the rename first
+        ret = super().ftp_RNTO(path)
+
+        # If RNTO succeeded, client gets 250 (you already see that in logs).
+        # Now queue processing ONLY for final CSV.
+        if dst and dst.lower().endswith(".csv"):
+            final_path = os.path.join(self.upload_dir, os.path.basename(dst))
+
+            # In your logs dst is already absolute (/app/uploads/...), but normalize anyway.
+            if os.path.abspath(dst) != os.path.abspath(final_path):
+                os.rename(dst, final_path)
+            else:
+                final_path = dst
+
+            self.log(f"[INFO] Rename complete: {src} -> {final_path}")
+            processing_queue.put(final_path)
+
+        return ret
+
 
     
 # -- Testing the processing and upload -- #
