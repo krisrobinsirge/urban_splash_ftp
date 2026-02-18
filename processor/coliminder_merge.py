@@ -18,6 +18,22 @@ class ColiminderColumns:
 
 COLIMINDER_COLUMNS = ColiminderColumns()
 
+MICROFLU_COLUMN = "microFlu_TRP"
+SIGNAL_STRENGTH_COLUMN = "Signal strength"
+PRIMARY_ALIGNMENT_COLUMNS = (
+    "BGA PC RFU",
+    "BGA PC ug/L",
+    "Chlorophyll RFU",
+    "Chlorophyll ug/L",
+    "Cond uS/cm",
+    "fDOM QSU",
+    "fDOM RFU",
+    "pH",
+    "SpCond uS/cm",
+    "Temp C",
+    "Turbidity",
+)
+
 
 def _find_timestamp_column(columns: Iterable[str]) -> Optional[str]:
     candidates = [
@@ -46,6 +62,96 @@ def _parse_coliminder_uid(series: pd.Series) -> pd.Series:
 
 def _format_coliminder_timestamp(value: datetime) -> str:
     return value.strftime("%d-%m-%Y %H:%M:%S")
+
+
+def _non_empty_mask(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).str.strip().ne("")
+
+
+def _primary_alignment_mask(df: pd.DataFrame) -> pd.Series:
+    present_primary_columns = [col for col in PRIMARY_ALIGNMENT_COLUMNS if col in df.columns]
+    if not present_primary_columns:
+        return pd.Series(False, index=df.index)
+    mask = pd.Series(False, index=df.index)
+    for column in present_primary_columns:
+        mask = mask | _non_empty_mask(df[column])
+    return mask
+
+
+def _align_microflu_rows_to_primary_measurements(
+    df: pd.DataFrame,
+    timestamp_col: str,
+    log: logging.Logger,
+) -> None:
+    if MICROFLU_COLUMN not in df.columns:
+        return
+
+    obs_times = _parse_observator_timestamps(df[timestamp_col])
+    valid_time_mask = obs_times.notna()
+    if not valid_time_mask.any():
+        return
+
+    primary_row_mask = _primary_alignment_mask(df)
+    primary_row_mask = primary_row_mask & valid_time_mask
+    primary_indices = primary_row_mask[primary_row_mask].index
+    if len(primary_indices) == 0:
+        return
+
+    microflu_source_mask = _non_empty_mask(df[MICROFLU_COLUMN]) & valid_time_mask & ~primary_row_mask
+    source_indices = microflu_source_mask[microflu_source_mask].index
+    if len(source_indices) == 0:
+        return
+
+    best_sources: dict[int, tuple[int, pd.Timedelta]] = {}
+    for source_idx in source_indices:
+        source_time = obs_times.loc[source_idx]
+        if pd.isna(source_time):
+            continue
+        diffs = (obs_times.loc[primary_indices] - source_time).abs()
+        if diffs.empty:
+            continue
+        target_idx = diffs.idxmin()
+        diff = diffs.loc[target_idx]
+        prev = best_sources.get(target_idx)
+        if prev is None or diff < prev[1]:
+            best_sources[target_idx] = (source_idx, diff)
+
+    moved_sources: list[int] = []
+    for target_idx, (source_idx, _) in best_sources.items():
+        if source_idx == target_idx:
+            continue
+        if _non_empty_mask(pd.Series([df.at[target_idx, MICROFLU_COLUMN]])).iloc[0]:
+            continue
+        df.at[target_idx, MICROFLU_COLUMN] = df.at[source_idx, MICROFLU_COLUMN]
+        df.at[source_idx, MICROFLU_COLUMN] = ""
+        moved_sources.append(source_idx)
+
+    if not moved_sources:
+        return
+
+    drop_indices: list[int] = []
+    for idx in moved_sources:
+        row_has_other_data = False
+        for column in df.columns:
+            if column in {timestamp_col, MICROFLU_COLUMN}:
+                continue
+            if column == SIGNAL_STRENGTH_COLUMN:
+                if _non_empty_mask(pd.Series([df.at[idx, column]])).iloc[0]:
+                    row_has_other_data = True
+                continue
+            if _non_empty_mask(pd.Series([df.at[idx, column]])).iloc[0]:
+                row_has_other_data = True
+                break
+        if not row_has_other_data:
+            drop_indices.append(idx)
+
+    if drop_indices:
+        df.drop(index=drop_indices, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+    log.info(
+        "Aligned %s microFlu_TRP rows to nearest primary measurement rows.",
+        len(moved_sources),
+    )
 
 
 def merge_coliminder_into_file(
@@ -81,12 +187,19 @@ def merge_coliminder_into_file(
         _write_with_order(df, obs_path, original_columns, new_columns)
         return False
 
+    _align_microflu_rows_to_primary_measurements(df, timestamp_col, log)
+
     obs_times = _parse_observator_timestamps(df[timestamp_col])
     valid_obs = obs_times.dropna()
     if valid_obs.empty:
         log.warning("No valid timestamps found in %s; leaving Coliminder columns empty.", obs_path)
         _write_with_order(df, obs_path, original_columns, new_columns)
         return False
+    candidate_obs = valid_obs
+    primary_candidate_mask = _primary_alignment_mask(df) & obs_times.notna()
+    primary_candidates = obs_times[primary_candidate_mask].dropna()
+    if not primary_candidates.empty:
+        candidate_obs = primary_candidates
 
     if coliminder_path is None:
         log.info("No Coliminder file provided; leaving Coliminder columns empty.")
@@ -136,7 +249,7 @@ def merge_coliminder_into_file(
         col_time = row["_col_time"]
         if pd.isna(col_time):
             continue
-        time_diffs = (valid_obs - col_time).abs()
+        time_diffs = (candidate_obs - col_time).abs()
         if time_diffs.empty:
             continue
         target_idx = time_diffs.idxmin()
